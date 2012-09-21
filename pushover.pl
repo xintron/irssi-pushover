@@ -184,7 +184,7 @@ sub ignore_remove {
 sub write_file {
     read_settings();
     my $fp;
-    if (!open($fp, ">$pushover_ignorefile")) {
+    if (!open($fp, ">", $pushover_ignorefile)) {
         Irssi::print("Error opening ignore file", MSGLEVEL_CLIENTCRAP);
         return;
     }
@@ -195,7 +195,7 @@ sub write_file {
 sub read_file {
     read_settings();
     my $fp;
-    if (!open($fp, "<$pushover_ignorefile")) {
+    if (!open($fp, "<", $pushover_ignorefile)) {
         Irssi::print("Error opening ignore file", MSGLEVEL_CLIENTCRAP);
         return;
     }
@@ -203,7 +203,7 @@ sub read_file {
     my @out;
     while (<$fp>) {
         chomp;
-        next unless($_ ne '');
+        next if $_ eq '';
         push(@out, $_);
     }
     close $fp;
