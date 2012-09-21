@@ -7,8 +7,9 @@ use warnings;
 use Irssi;
 use vars qw($VERSION %IRSSI %config);
 use LWP::UserAgent;
+use Scalar::Util qw(looks_like_number);
 
-$VERSION = '0.1';
+$VERSION = '0.2';
 
 %IRSSI = (
     authors => 'Marcus Carlsson',
@@ -20,6 +21,34 @@ $VERSION = '0.1';
 );
 
 my $app_token = 'yy4E5dCm5FKx1AGrxsxVgmZu3pBWs0';
+my $pushover_ignorefile;
+
+
+sub cmd_help {
+    my $out = <<'HELP_EOF';
+PUSHIGNORE LIST
+PUSHIGNORE ADD <hostmask>
+PUSHIGNORE REMOVE <number>
+
+The mask matches in the format ident@host. Notice that no-ident responses puts
+a tilde in front of the ident.
+
+Examples:
+  Will match foo@test.bar.se but *not* ~foo@test.bar.se.
+    /PUSHIGNORE ADD foo@*.bar.se  
+  Use the list-command to show a list of ignores and the number in front
+  combined with remove to delete that mask.
+    /PUSHIGNORE REMOVE 2
+
+For a list of available settings, run:
+  /set pushover
+HELP_EOF
+    chomp $out;
+    Irssi::print($out, MSGLEVEL_CLIENTCRAP);
+}
+sub read_settings {
+    $pushover_ignorefile = Irssi::settings_get_str('pushover_ignorefile');
+}
 
 sub debug {
     return unless Irssi::settings_get_bool('pushover_debug');
@@ -55,10 +84,10 @@ sub send_push {
 }
 
 sub msg_pub {
-    my ($server, $data, $nick, $mask, $target) = @_;
+    my ($server, $data, $nick, $address, $target) = @_;
     my $safeNick = quotemeta($server->{nick});
 
-    if ($server->{usermode_away} == '1' && $data =~ /$safeNick/i) {
+    if ($server->{usermode_away} == '1' && $data =~ /$safeNick/i && !check_ignore($address)) {
         debug('Got pub msg.');
         send_push($target, $nick.': '.strip_formating($data));
     }
@@ -66,7 +95,7 @@ sub msg_pub {
 
 sub msg_pri {
     my ($server, $data, $nick, $address) = @_;
-    if ($server->{usermode_away} == '1') {
+    if ($server->{usermode_away} == '1' && !check_ignore($address)) {
         debug('Got priv msg.');
         send_push('Priv, '.$nick, strip_formating($data));
     }
@@ -74,7 +103,7 @@ sub msg_pri {
 
 sub msg_kick {
     my ($server, $channel, $nick, $kicker, $address, $reason) = @_;
-    if ($server->{usermode_away} == '1' && $nick eq $server->{nick}) {
+    if ($server->{usermode_away} == '1' && $nick eq $server->{nick} && !check_ignore($address)) {
         debug('Was kicked.');
         send_push('Kicked: '.$channel, 'Was kicked by: '.$kicker.'. Reason: '.strip_formating($reason));
     }
@@ -88,8 +117,113 @@ sub strip_formating {
     return $msg;
 }
 
+
+sub check_ignore {
+    return 0 unless(Irssi::settings_get_bool('pushover_ignore'));
+    my @ignores = read_file();
+    return 0 unless(@ignores);
+    my ($mask) = @_;
+
+    foreach (@ignores) {
+        $_ =~ s/\./\\./g;
+        $_ =~ s/\*/.*?/g;
+        if ($mask =~ m/^$_$/) {
+            debug('Ignore matches, not pushing.');
+            return 1;
+        }
+    }
+    return 0;
+}
+sub ignore_handler {
+    my ($data, $server, $item) = @_;
+    $data =~ s/\s+$//g;
+    Irssi::command_runsub('pushignore', $data, $server, $item);
+}
+
+sub ignore_unknown {
+    cmd_help();
+    Irssi::signal_stop(); # Don't print 'no such command' error.
+}
+
+sub ignore_list {
+    my @data = read_file();
+    if (@data) {
+        my $i = 1;
+        my $out;
+        foreach(@data) {
+            $out .= $i++.". $_\n";
+        }
+        chomp $out;
+        Irssi::print($out, MSGLEVEL_CLIENTCRAP);
+    }
+}
+
+sub ignore_add {
+    my ($data, $server, $item) = @_;
+    $data =~ s/^([\s]+).*$/$1/;
+    return Irssi::print("No hostmask given.", MSGLEVEL_CLIENTCRAP) unless($data ne "");
+
+    my @ignores = read_file();
+    push(@ignores, $data);
+    write_file(@ignores);
+    Irssi::print("Successfully added '$data'.", MSGLEVEL_CLIENTCRAP);
+}
+
+sub ignore_remove {
+    my($num, $server, $item) = @_;
+    $num =~ s/^(\d+).*$/$1/;
+    return Irssi::print("List-number is needed when removing", MSGLEVEL_CLIENTCRAP) unless(looks_like_number($num));
+    my @ignores = read_file();
+    
+    # Index out of range
+    return Irssi::print("Number was out of range.", MSGLEVEL_CLIENTCRAP) unless(scalar(@ignores) >=  $num);
+    delete $ignores[$num-1];
+    write_file(@ignores); 
+}
+
+sub write_file {
+    read_settings();
+    open my $fp, ">$pushover_ignorefile";
+    if (!$fp) {
+        Irssi::print("Error opening ignore file", MSGLEVEL_CLIENTCRAP);
+        return 0;
+    }
+    print $fp join("\n", @_);
+    close $fp;
+}
+
+sub read_file {
+    read_settings();
+    open my $fp, "<$pushover_ignorefile";
+    if (!$fp) {
+        Irssi::print("Error opening ignore file", MSGLEVEL_CLIENTCRAP);
+        return 0;
+    }
+
+    my @out;
+    while (<$fp>) {
+        chomp;
+        next unless($_ ne '');
+        push(@out, $_);
+    }
+    close $fp;
+
+    return @out;
+}
+
 Irssi::settings_add_str($IRSSI{'name'}, 'pushover_token', '');
 Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_debug', 0);
+Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_ignore', 1);
+Irssi::settings_add_str($IRSSI{'name'}, 'pushover_ignorefile', Irssi::get_irssi_dir().'/pushover_ignores');
+
+Irssi::command_bind('help pushignore', \&cmd_help);
+Irssi::command_bind('pushignore help', \&cmd_help);
+Irssi::command_bind('pushignore add', \&ignore_add);
+Irssi::command_bind('pushignore remove', \&ignore_remove);
+Irssi::command_bind('pushignore list', \&ignore_list);
+Irssi::command_bind('pushignore', \&ignore_handler);
+Irssi::signal_add_first("default command pushignore", \&ignore_unknown);
+
 
 Irssi::signal_add_last('message public', 'msg_pub');
 Irssi::signal_add_last('message private', 'msg_pri');
