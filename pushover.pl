@@ -127,7 +127,7 @@ sub check_ignore {
     foreach (@ignores) {
         $_ =~ s/\./\\./g;
         $_ =~ s/\*/.*?/g;
-        if ($mask =~ m/^$_$/) {
+        if ($mask =~ m/^$_$/i) {
             debug('Ignore matches, not pushing.');
             return 1;
         }
