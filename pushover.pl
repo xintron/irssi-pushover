@@ -87,7 +87,7 @@ sub msg_pub {
     my ($server, $data, $nick, $address, $target) = @_;
     my $safeNick = quotemeta($server->{nick});
 
-    if ($server->{usermode_away} == '1' && $data =~ /$safeNick/i && !check_ignore($address)) {
+    if ($server->{usermode_away} == '1' && $data =~ /$safeNick/i && !check_ignore($address) && !check_ignore_channels($target)) {
         debug('Got pub msg.');
         send_push($target, $nick.': '.strip_formating($data));
     }
@@ -134,6 +134,17 @@ sub check_ignore {
     }
     return 0;
 }
+sub check_ignore_channels {
+	my ($target) = @_;
+	my @ignore_channels = split(' ', Irssi::settings_get_str('pushover_ignorechannels'));
+	return 0 unless @ignore_channels;
+	if (grep {lc($_) eq lc($target)} @ignore_channels) {
+		debug("$target set as ignored channel.");
+		return 1;
+	}
+
+	return 0;
+}
 sub ignore_handler {
     my ($data, $server, $item) = @_;
     $data =~ s/\s+$//g;
@@ -176,7 +187,7 @@ sub ignore_remove {
     my @ignores = read_file();
     
     # Index out of range
-    return Irssi::print("Number was out of range.", MSGLEVEL_CLIENTCRAP) unless(scalar(@ignores) >=  $num);
+    return Irssi::print("Number was out of range.", MSGLEVEL_CLIENTCRAP) unless(scalar(@ignores) >= $num);
     delete $ignores[$num-1];
     write_file(@ignores); 
 }
@@ -215,6 +226,7 @@ Irssi::settings_add_str($IRSSI{'name'}, 'pushover_token', '');
 Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_debug', 0);
 Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_ignore', 1);
 Irssi::settings_add_str($IRSSI{'name'}, 'pushover_ignorefile', Irssi::get_irssi_dir().'/pushover_ignores');
+Irssi::settings_add_str($IRSSI{'name'}, 'pushover_ignorechannels', '');
 
 Irssi::command_bind('help pushignore', \&cmd_help);
 Irssi::command_bind('pushignore help', \&cmd_help);
