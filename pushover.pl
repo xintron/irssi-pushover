@@ -9,7 +9,7 @@ use vars qw($VERSION %IRSSI %config);
 use LWP::UserAgent;
 use Scalar::Util qw(looks_like_number);
 
-$VERSION = '0.2';
+$VERSION = '0.2.1';
 
 %IRSSI = (
     authors => 'Marcus Carlsson',
@@ -20,7 +20,6 @@ $VERSION = '0.2';
     url => 'https://github.com/xintron',
 );
 
-my $app_token = 'yy4E5dCm5FKx1AGrxsxVgmZu3pBWs0';
 my $pushover_ignorefile;
 
 
@@ -59,6 +58,7 @@ sub debug {
 
 sub send_push {
     my $user_token = Irssi::settings_get_str('pushover_token');
+    my $app_token = Irssi::settings_get_str('pushover_apptoken');
     if (!$user_token) {
         debug('Missing pushover token.');
         return;
@@ -71,6 +71,7 @@ sub send_push {
             token => $app_token,
             user => $user_token,
             message => $text,
+            sound => Irssi::settings_get_str('pushover_sound'),
             title => $channel
         ]
     );
@@ -107,6 +108,16 @@ sub msg_kick {
         debug('Was kicked.');
         send_push('Kicked: '.$channel, 'Was kicked by: '.$kicker.'. Reason: '.strip_formating($reason));
     }
+}
+
+sub msg_test {
+   my ($data, $server, $item) = @_;
+   $data =~ s/^([\s]+).*$/$1/;
+   my $orig_debug = Irssi::settings_get_bool('pushover_debug');
+   Irssi::settings_set_bool('pushover_debug', 1);
+   debug("Sending test message :" . $data);
+   send_push("Test Message", strip_formating($data));
+   Irssi::settings_set_bool('pushover_debug', $orig_debug);
 }
 
 sub strip_formating {
@@ -212,9 +223,11 @@ sub read_file {
 }
 
 Irssi::settings_add_str($IRSSI{'name'}, 'pushover_token', '');
+Irssi::settings_add_str($IRSSI{'name'}, 'pushover_apptoken', 'yy4E5dCm5FKx1AGrxsxVgmZu3pBWs0');
 Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_debug', 0);
 Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_ignore', 1);
 Irssi::settings_add_str($IRSSI{'name'}, 'pushover_ignorefile', Irssi::get_irssi_dir().'/pushover_ignores');
+Irssi::settings_add_str($IRSSI{'name'}, 'pushover_sound', 'siren');
 
 Irssi::command_bind('help pushignore', \&cmd_help);
 Irssi::command_bind('pushignore help', \&cmd_help);
@@ -222,6 +235,7 @@ Irssi::command_bind('pushignore add', \&ignore_add);
 Irssi::command_bind('pushignore remove', \&ignore_remove);
 Irssi::command_bind('pushignore list', \&ignore_list);
 Irssi::command_bind('pushignore', \&ignore_handler);
+Irssi::command_bind('pushtest', \&msg_test);
 Irssi::signal_add_first("default command pushignore", \&ignore_unknown);
 
 
@@ -231,5 +245,8 @@ Irssi::signal_add_last('message kick', 'msg_kick');
 
 Irssi::print('%Y>>%n '.$IRSSI{name}.' '.$VERSION.' loaded.');
 if (!Irssi::settings_get_str('pushover_token')) {
-    Irssi::print('%Y>>%n '.$IRSSI{name}.' Pushover token is not set, set it with /set pushover_token token.');
+    Irssi::print('%Y>>%n '.$IRSSI{name}.' Pushover User Key token is not set, set it with /set pushover_token token.');
+}
+if (!Irssi::settings_get_str('pushover_apptoken')) {
+    Irssi::print('%Y>>%n '.$IRSSI{name}.' Pushover application token is not set, set it with /set pushover_apptoken token.');
 }
