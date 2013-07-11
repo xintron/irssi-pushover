@@ -88,7 +88,15 @@ sub msg_pub {
     my ($server, $data, $nick, $address, $target) = @_;
     my $safeNick = quotemeta($server->{nick});
 
-    if ($server->{usermode_away} == '1' && $data =~ /$safeNick/i && !check_ignore($address) && !check_ignore_channels($target)) {
+    if(check_ignore_channels($target)) {
+        return;
+    }
+
+    if(check_ignore($address) || check_away($server)) {
+        return;
+    }
+
+    if ($data =~ /$safeNick/i) {
         debug('Got pub msg.');
         send_push($target, $nick.': '.strip_formating($data));
     }
@@ -96,15 +104,22 @@ sub msg_pub {
 
 sub msg_pri {
     my ($server, $data, $nick, $address) = @_;
-    if ($server->{usermode_away} == '1' && !check_ignore($address)) {
-        debug('Got priv msg.');
-        send_push('Priv, '.$nick, strip_formating($data));
+
+    if(check_ignore($address) || check_away($server)) {
+        return;
     }
+    debug('Got priv msg.');
+    send_push('Priv, '.$nick, strip_formating($data));
 }
 
 sub msg_kick {
     my ($server, $channel, $nick, $kicker, $address, $reason) = @_;
-    if ($server->{usermode_away} == '1' && $nick eq $server->{nick} && !check_ignore($address)) {
+
+    if(check_ignore($address) || check_away($server)) {
+        return;
+    }
+
+    if ($nick eq $server->{nick}) {
         debug('Was kicked.');
         send_push('Kicked: '.$channel, 'Was kicked by: '.$kicker.'. Reason: '.strip_formating($reason));
     }
@@ -128,6 +143,17 @@ sub strip_formating {
     return $msg;
 }
 
+
+# check our away status & pushover_only_if_away. returns 0 if it's ok to send a message. 
+sub check_away {
+    my ($server) = @_;
+    my $msg_only_if_away = Irssi::settings_get_bool('pushover_only_if_away');
+    if ($msg_only_if_away && $server->{usermode_away} != '1') {
+        debug("Only sending messages if we're marked as away, and we're not");
+        return 1;
+    }
+    return 0;
+}
 
 sub check_ignore {
     return 0 unless(Irssi::settings_get_bool('pushover_ignore'));
@@ -237,6 +263,7 @@ Irssi::settings_add_str($IRSSI{'name'}, 'pushover_token', '');
 Irssi::settings_add_str($IRSSI{'name'}, 'pushover_apptoken', '');
 Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_debug', 0);
 Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_ignore', 1);
+Irssi::settings_add_bool($IRSSI{'name'}, 'pushover_only_if_away', 0);
 Irssi::settings_add_str($IRSSI{'name'}, 'pushover_ignorefile', Irssi::get_irssi_dir().'/pushover_ignores');
 Irssi::settings_add_str($IRSSI{'name'}, 'pushover_ignorechannels', '');
 Irssi::settings_add_str($IRSSI{'name'}, 'pushover_sound', 'siren');

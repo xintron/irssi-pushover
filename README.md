@@ -33,3 +33,5 @@ when you're not online.
   2. /set pushover_ignorefile - ignore messages from ....
   3. /set pushover_ignorechannels - space separated list of channels to ignore.
   4. /pushignore help - should get you started in populating the ignore list.
+  5. /set pushover_only_if_away [on|off] - if set to on, then you'll 
+        need to be set to away before we send notifications.
