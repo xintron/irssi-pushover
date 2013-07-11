@@ -171,17 +171,18 @@ sub check_ignore {
     }
     return 0;
 }
-sub check_ignore_channels {
-	my ($target) = @_;
-	my @ignore_channels = split(' ', Irssi::settings_get_str('pushover_ignorechannels'));
-	return 0 unless @ignore_channels;
-	if (grep {lc($_) eq lc($target)} @ignore_channels) {
-		debug("$target set as ignored channel.");
-		return 1;
-	}
 
-	return 0;
+sub check_ignore_channels {
+    my ($target) = @_;
+    my @ignore_channels = split(' ', Irssi::settings_get_str('pushover_ignorechannels'));
+    return 0 unless @ignore_channels;
+    if (grep {lc($_) eq lc($target)} @ignore_channels) {
+        debug("$target set as ignored channel.");
+        return 1;
+    }
+    return 0;
 }
+
 sub ignore_handler {
     my ($data, $server, $item) = @_;
     $data =~ s/\s+$//g;
