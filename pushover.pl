@@ -102,6 +102,26 @@ sub msg_pub {
     }
 }
 
+sub msg_print_text {
+    my ($dest, $text, $stripped) = @_;
+    my $server = $dest->{server};
+    my $target = $dest->{target};
+
+    return if (!$server || !($dest->{level} & MSGLEVEL_HILIGHT));
+
+    if(check_ignore_channels($target)) {
+        return;
+    }
+
+    if(check_away($server)) {
+        return;
+    }
+
+    debug('Got nick highlight');
+    $stripped =~ s/^\s+|\s+$//g;
+    send_push($target, $stripped);
+}
+
 sub msg_pri {
     my ($server, $data, $nick, $address) = @_;
 
@@ -279,7 +299,8 @@ Irssi::command_bind('pushtest', \&msg_test);
 Irssi::signal_add_first("default command pushignore", \&ignore_unknown);
 
 
-Irssi::signal_add_last('message public', 'msg_pub');
+#Irssi::signal_add_last('message public', 'msg_pub');
+Irssi::signal_add_last('print text', 'msg_print_text');
 Irssi::signal_add_last('message private', 'msg_pri');
 Irssi::signal_add_last('message kick', 'msg_kick');
 
